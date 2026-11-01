@@ -1,0 +1,80 @@
+name: Verify personal site
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          bundler-cache: true
+      - name: Build with Jekyll
+        run: bundle exec jekyll build --baseurl "/LJT-Homepage"
+      - name: Inspect rendered content and internal links
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit, unquote
+          import re
+
+          root = Path("_site")
+          pages = sorted(root.rglob("*.html"))
+          print("RENDERED HTML PAGES:")
+          for p in pages:
+              print("  ", p.relative_to(root))
+
+          class Text(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.skip = 0
+                  self.parts = []
+              def handle_starttag(self, tag, attrs):
+                  if tag in ("script", "style"):
+                      self.skip += 1
+              def handle_endtag(self, tag):
+                  if tag in ("script", "style") and self.skip:
+                      self.skip -= 1
+              def handle_data(self, data):
+                  if not self.skip and data.strip():
+                      self.parts.append(data.strip())
+
+          for name in ["index.html", "publications/index.html"]:
+              print("\n=== VISIBLE TEXT:", name, "===")
+              parser = Text()
+              parser.feed((root / name).read_text())
+              print(" | ".join(parser.parts))
+
+          print("\n=== INTERNAL LINK CHECK ===")
+          missing = []
+          for p in pages:
+              html = (root / p).read_text()
+              for attr in ("href", "src"):
+                  for value in re.findall(attr + r'="([^"]+)"', html):
+                      url = urlsplit(value)
+                      if url.scheme or not url.path:
+                          continue
+                      path = unquote(url.path)
+                      if path.startswith("/LJT-Homepage"):
+                          path = path[len("/LJT-Homepage"):] or "/"
+                      elif path.startswith("/"):
+                          missing.append((str(p), value, "outside baseurl"))
+                          continue
+                      target = root / path.lstrip("/")
+                      if path.endswith("/"):
+                          target = target / "index.html"
+                      if not target.exists() and not Path(str(target) + ".html").exists():
+                          missing.append((str(p), value, "missing file"))
+          for item in missing:
+              print("BROKEN:", item)
+          print("Broken internal links:", len(missing))
+          PY
