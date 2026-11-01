@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  pages: write
 
 jobs:
   verify:
@@ -17,6 +18,19 @@ jobs:
         with:
           ruby-version: '3.1'
           bundler-cache: true
+      - name: Enable GitHub Pages with workflow builds if needed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          code=$(curl -sS -o /tmp/pages-response.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages" \
+            -d '{"build_type":"workflow"}')
+          echo "Create Pages site HTTP status: ${code}"
+          cat /tmp/pages-response.json
+          echo
       - name: Build with Jekyll
         run: bundle exec jekyll build --baseurl "/LJT-Homepage"
       - name: Inspect rendered content and internal links
@@ -57,7 +71,7 @@ jobs:
           print("\n=== INTERNAL LINK CHECK ===")
           missing = []
           for p in pages:
-              html = (root / p).read_text()
+              html = p.read_text()
               for attr in ("href", "src"):
                   for value in re.findall(attr + r'="([^"]+)"', html):
                       url = urlsplit(value)
