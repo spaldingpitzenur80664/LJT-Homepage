@@ -58,7 +58,9 @@ with base_path so the result is always absolute.
   {% assign seo_author_twitter = seo_author_twitter | replace: "@", "" %}
 {% endif %}
 
-{% if page.date %}
+{% if page.year %}
+  <meta property="article:published_time" content="{{ page.year }}">
+{% elsif page.date %}
   <meta property="article:published_time" content="{{ page.date | date_to_xmlschema }}">
 {% endif %}
 
@@ -133,7 +135,7 @@ Twitter username (site.twitter.username), matching upstream behavior.
 <meta property="og:locale" content="{{ site.locale | default: "en" }}">
 <meta property="og:site_name" content="{{ site.title }}"> 
 <meta property="og:title" content="{{ page.title | default: site.title | markdownify | strip_html | strip_newlines | escape_once }}">
-{% if page.date %}
+{% if page.year or page.date %}
   <meta property="og:type" content="article">
 {% endif %}
 {% comment %} og:description comes from the page excerpt, or falls back to site.og_description; it is not emitted otherwise. {% endcomment %}
